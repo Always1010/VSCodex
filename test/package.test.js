@@ -3,7 +3,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { zip, crc32, buildEntries } = require('../scripts/package');
+const os = require('node:os');
+const { createHash } = require('node:crypto');
+const { zip, crc32, buildEntries, build } = require('../scripts/package');
 test('VSIX ZIP 校验和与目录定位正确，不包含开发数据或密钥', () => {
   assert.equal(crc32(Buffer.from('123456789')), 0xcbf43926);
   const { entries, manifest } = buildEntries();
@@ -29,6 +31,33 @@ test('VSIX ZIP 校验和与目录定位正确，不包含开发数据或密钥',
   assert.equal(cursor, end);
   assert.match(entries.find(([name]) => name === 'extension.vsixmanifest')[1], new RegExp(manifest.version.replaceAll('.', '\\.')));
   for (const view of Object.values(manifest.contributes.views).flat()) assert.equal(view.type, 'webview');
+});
+test('固定安装包路径、内部版本自动递增且更新索引匹配完整包', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'vscodex-package-'));
+  try {
+    const root = path.resolve(__dirname, '..');
+    for (const name of ['package.json', 'extension.js', 'README.md', 'lib', 'src', 'media', 'docs']) fs.cpSync(path.join(root, name), path.join(base, name), { recursive: true });
+    const filename = build(base); const indexPath = path.join(base, 'artifacts', 'vscodex-workbench.update.json');
+    const first = JSON.parse(fs.readFileSync(indexPath));
+    assert.equal(path.basename(filename), 'vscodex-workbench.vsix');
+    assert.equal(first.sha256, createHash('sha256').update(fs.readFileSync(filename)).digest('hex'));
+    assert.equal(first.extensionId, 'vscodex-local.vscodex-workbench');
+    assert.equal(build(base), filename);
+    assert.equal(JSON.parse(fs.readFileSync(indexPath)).version, first.version);
+    fs.appendFileSync(path.join(base, 'extension.js'), '\n// changed\n');
+    build(base);
+    const second = JSON.parse(fs.readFileSync(indexPath));
+    assert.equal(second.version, first.version.replace(/\d+$/, patch => String(Number(patch) + 1)));
+    const bytes = fs.readFileSync(filename);
+    assert.equal(second.sha256, createHash('sha256').update(bytes).digest('hex'));
+    assert.ok(bytes.includes(Buffer.from(`"version": "${second.version}"`)));
+    assert.ok(bytes.includes(Buffer.from(`Version="${second.version}"`)));
+    assert.ok(bytes.includes(Buffer.from('vscodexLocalUpdates')));
+    assert.equal(JSON.parse(fs.readFileSync(path.join(base, 'package.json'))).version, first.version);
+    fs.writeFileSync(indexPath, '{}');
+    assert.throws(() => build(base), /扩展标识不匹配/);
+    assert.deepEqual(fs.readFileSync(filename), bytes);
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 test('长期文档的本地链接均有目标', () => {
   const base = path.resolve(__dirname, '..');

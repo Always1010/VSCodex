@@ -2,7 +2,7 @@
   "name": "vscodex-workbench",
   "displayName": "VSCodex Workbench",
   "description": "按项目组织的 Codex 工作台：抽屉导航、上下文引用和侧边讨论。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "vscodex-local",
   "private": true,
   "engines": { "vscode": "^1.95.0", "node": ">=20" },
