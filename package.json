@@ -9,7 +9,6 @@
   "categories": ["AI", "Other"],
   "extensionKind": ["workspace"],
   "main": "./extension.js",
-  "activationEvents": ["onView:vscodex.chat"],
   "capabilities": { "untrustedWorkspaces": { "supported": false, "description": "Codex 可以执行命令和修改工作区，需要先信任工作区。" }, "virtualWorkspaces": false },
   "scripts": {
     "check": "node scripts/check.js",
