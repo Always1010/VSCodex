@@ -21,6 +21,7 @@
     "views": { "vscodex": [{ "type": "webview", "id": "vscodex.chat", "name": "聊天工作台" }] },
     "commands": [
       { "command": "vscodex.open", "title": "VSCodex: 打开聊天工作台" },
+      { "command": "vscodex.switchChat", "title": "VSCodex: 搜索并切换聊天" },
       { "command": "vscodex.addSelection", "title": "VSCodex: 添加选中代码到对话" },
       { "command": "vscodex.askSelection", "title": "VSCodex: 在侧边聊天中询问选中代码" },
       { "command": "vscodex.setApiKey", "title": "VSCodex: 设置普通讨论 API 密钥" }
@@ -29,7 +30,10 @@
       { "command": "vscodex.addSelection", "when": "editorHasSelection", "group": "vscodex@1" },
       { "command": "vscodex.askSelection", "when": "editorHasSelection", "group": "vscodex@2" }
     ] },
-    "keybindings": [{ "command": "vscodex.open", "key": "ctrl+alt+c", "mac": "cmd+alt+c" }],
+    "keybindings": [
+      { "command": "vscodex.open", "key": "ctrl+alt+c", "mac": "cmd+alt+c" },
+      { "command": "vscodex.switchChat", "key": "ctrl+alt+l", "mac": "cmd+alt+l" }
+    ],
     "configuration": {
       "title": "VSCodex",
       "properties": {
