@@ -252,6 +252,20 @@ class Workbench {
     const session = await this.store.start(cwd, { ...this.options });
     this.activeId = session.id; this.sideId = null; this.publish();
   }
+  async switchChat() {
+    await this.connect();
+    const projects = this.state().projects.filter(project => this.scope !== 'current' || project.current);
+    const choices = projects.flatMap(project => project.threads.map(thread => ({
+      label: `${thread.isPinned ? '$(pin) ' : ''}${thread.title || '未命名聊天'}`,
+      description: project.name,
+      detail: `${thread.busy ? '执行中 · ' : ''}${thread.cwd || project.path || ''}`,
+      threadId: thread.id
+    })));
+    if (!choices.length) { vscode.window.showInformationMessage('当前项目范围没有聊天，可新建聊天或扩大项目范围。'); return; }
+    const selected = await vscode.window.showQuickPick(choices, { placeHolder: '搜索聊天或项目名称', matchOnDescription: true, matchOnDetail: true });
+    if (!selected) return;
+    await this.selectThread(selected.threadId); await this.reveal();
+  }
   async selectThread(id) {
     if (typeof id !== 'string') return;
     const available = this.state().projects.flatMap(p => p.threads).some(t => t.id === id);
@@ -450,6 +464,7 @@ function activate(context) {
   const workbench = new Workbench(context);
   context.subscriptions.push(workbench, vscode.window.registerWebviewViewProvider('vscodex.chat', workbench, { webviewOptions: { retainContextWhenHidden: true } }));
   context.subscriptions.push(vscode.commands.registerCommand('vscodex.open', () => workbench.reveal()));
+  context.subscriptions.push(vscode.commands.registerCommand('vscodex.switchChat', () => workbench.switchChat().catch(error => vscode.window.showErrorMessage(error.message))));
   for (const [command, side] of [['vscodex.addSelection', false], ['vscodex.askSelection', true]]) {
     context.subscriptions.push(vscode.commands.registerCommand(command, () => workbench.editorQuote(side).catch(e => vscode.window.showErrorMessage(e.message))));
   }

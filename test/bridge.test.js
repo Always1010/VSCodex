@@ -23,7 +23,7 @@ function fixture(dependencies = {}) {
   const workbench = new module.exports.Workbench(context);
   workbench.view = { webview: { postMessage: message => sent.push(message) } };
   workbench.connection = 'ready';
-  return { workbench, values, memory, sent, commands };
+  return { workbench, values, memory, sent, commands, vscode };
 }
 test('侧边发送固定只读、主聊天保留自己的执行目录，筛选不会改变发送目标', async () => {
   const { workbench, sent } = fixture(); const calls = [];
@@ -159,5 +159,20 @@ test('目录选择接受同一路径的分隔符及大小写形式，不接受�
   const alternative = process.platform === 'win32' ? 'c:\\projects\\VSCODEX\\.' : '/projects/vscodex/.';
   assert.equal(await workbench.pickCwd(alternative), directory);
   await assert.rejects(workbench.pickCwd(directory + '-other'), /已识别/);
+  workbench.dispose();
+});
+
+test('全局聊天搜索遵守项目范围并在选择后打开目标，取消不切换', async () => {
+  const { workbench, vscode, commands } = fixture();
+  workbench.roots = [{ name: '当前', path: '/current' }];
+  workbench.threads = [{ id: 'a', title: '当前任务', cwd: '/current' }, { id: 'b', title: '其他任务', cwd: '/other' }];
+  let chosen = null; workbench.selectThread = async id => { chosen = id; };
+  vscode.window.showQuickPick = async (items, options) => {
+    assert.equal(items.length, 1); assert.equal(items[0].threadId, 'a');
+    assert.equal(options.matchOnDescription, true); return items[0];
+  };
+  await workbench.switchChat(); assert.equal(chosen, 'a'); assert.equal(commands[0][0], 'vscodex.chat.focus');
+  chosen = null; vscode.window.showQuickPick = async () => undefined;
+  await workbench.switchChat(); assert.equal(chosen, null);
   workbench.dispose();
 });
