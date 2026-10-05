@@ -120,7 +120,12 @@ class Workbench {
       this.models = (listed.data || []).map(m => ({ id: m.model || m.id, displayName: m.displayName || m.model || m.id, supportedReasoningEfforts: m.supportedReasoningEfforts }));
       if (this.activeId && !this.discussions.has(this.activeId)) {
         try { await this.store.resume(this.activeId, { sandbox: this.options.permissions, approvalPolicy: 'on-request' }); }
-        catch (error) { this.activeId = null; this.sideId = null; await this.context.workspaceState.update('activeThread', null); this.notifyError(new Error('上次聊天无法恢复，可重新选择聊天。' + error.message)); }
+        catch (error) {
+          const unavailableId = this.activeId;
+          this.activeId = null; this.sideId = null; await this.context.workspaceState.update('activeThread', null);
+          this.view?.webview.postMessage({ type: 'restoreDraft', threadId: unavailableId });
+          this.notifyError(new Error('上次聊天无法恢复，可重新选择聊天；本地未发送草稿会尝试恢复。' + error.message));
+        }
       }
       if (this.sideId && !this.discussions.has(this.sideId)) {
         try { await this.store.resume(this.sideId, { sandbox: 'read-only', approvalPolicy: 'on-request' }); }

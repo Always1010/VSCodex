@@ -194,10 +194,11 @@ test('记住已选择聊天，重开时恢复；失效历史不阻断连接', as
     }
     close() {}
   }
-  const invalid = fixture({ './lib/rpc': { RpcClient: Rpc } }, workspaceValues).workbench;
+  const invalidSetup = fixture({ './lib/rpc': { RpcClient: Rpc } }, workspaceValues); const invalid = invalidSetup.workbench;
   invalid.connection = 'offline'; invalid.readRoots = async () => {}; invalid.executable = () => 'test';
   await invalid.connect(); assert.equal(invalid.connection, 'ready'); assert.equal(invalid.activeId, null);
   assert.equal(workspaceValues.activeThread, null); invalid.dispose();
+  assert.equal(invalidSetup.sent.some(message => message.type === 'restoreDraft' && message.threadId === 'a'), true);
 });
 
 test('无关配置变化不重置聊天权限、模型或项目范围', async () => {
