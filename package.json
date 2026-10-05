@@ -21,6 +21,7 @@
     "views": { "vscodex": [{ "type": "webview", "id": "vscodex.chat", "name": "聊天工作台" }] },
     "commands": [
       { "command": "vscodex.open", "title": "VSCodex: 打开聊天工作台" },
+      { "command": "vscodex.toggleChatList", "title": "VSCodex: 展开或收起聊天列表" },
       { "command": "vscodex.switchChat", "title": "VSCodex: 搜索并切换聊天" },
       { "command": "vscodex.addSelection", "title": "VSCodex: 添加选中代码到对话" },
       { "command": "vscodex.askSelection", "title": "VSCodex: 在侧边聊天中询问选中代码" },
@@ -33,6 +34,7 @@
     ] },
     "keybindings": [
       { "command": "vscodex.open", "key": "ctrl+alt+c", "mac": "cmd+alt+c" },
+      { "command": "vscodex.toggleChatList", "key": "ctrl+alt+j", "mac": "cmd+alt+j" },
       { "command": "vscodex.switchChat", "key": "ctrl+alt+l", "mac": "cmd+alt+l" }
     ],
     "configuration": {

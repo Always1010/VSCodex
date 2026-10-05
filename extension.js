@@ -27,14 +27,14 @@ class Workbench {
     this.pins = context.globalState.get('pins', {}); this.savedSides = new Set(context.globalState.get('savedSides', []));
     this.hiddenSides = new Set(context.globalState.get('hiddenSides', Object.values(this.sideByParent)));
     this.discussions = new Map(context.globalState.get('discussions', []).map(s => [s.id, { ...s, busy: false, turnId: null }]));
-    this.approvals = new Map(); this.items = new Map(); this.pendingMessages = [];
+    this.approvals = new Map(); this.items = new Map(); this.pendingMessages = []; this.webviewReady = false;
     this.pendingSends = new Set(); this.pendingSide = null;
     this.discussion = new Discussion({ onChange: session => { this.discussions.set(session.id, session); this.publish(); this.persistLater(); } });
     this.output = vscode.window.createOutputChannel('VSCodex'); context.subscriptions.push(this.output);
     this.options = { model: setting('model') || '', effort: setting('effort') || 'medium', permissions: setting('permissions') || 'workspace-write', sideProvider: setting('sideProvider') || 'codex' };
   }
   async resolveWebviewView(view) {
-    this.view = view;
+    this.view = view; this.webviewReady = false;
     view.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')] };
     view.webview.html = renderWebview({
       scriptUri: view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'app.js')).toString(),
@@ -44,7 +44,7 @@ class Workbench {
     view.webview.onDidReceiveMessage(message => {
       this.handle(message).catch(error => this.notifyError(error, message.channel));
     }, null, this.context.subscriptions);
-    view.onDidDispose(() => { this.view = null; }, null, this.context.subscriptions);
+    view.onDidDispose(() => { this.view = null; this.webviewReady = false; }, null, this.context.subscriptions);
   }
   async readRoots() {
     const folders = vscode.workspace.workspaceFolders || [];
@@ -201,6 +201,7 @@ class Workbench {
     if (!message || typeof message.type !== 'string') return;
     switch (message.type) {
       case 'ready':
+        this.webviewReady = true;
         this.publish();
         for (const queued of this.pendingMessages.splice(0)) this.view?.webview.postMessage(queued);
         await this.connect(); return;
@@ -471,6 +472,12 @@ class Workbench {
     const line = Math.max(0, Math.min(document.lineCount - 1, (Number(raw.startLine) || 1) - 1));
     const range = new vscode.Range(line, 0, line, 0); editor.selection = new vscode.Selection(range.start, range.end); editor.revealRange(range);
   }
+  async toggleChatList() {
+    const message = { type: 'toggleChatList' };
+    if (this.view && this.webviewReady) this.view.webview.postMessage(message);
+    else this.pendingMessages.push(message);
+    await this.reveal();
+  }
   async reveal() { await vscode.commands.executeCommand('vscodex.chat.focus'); }
   dispose() {
     this.disposed = true; clearTimeout(this.publishTimer); clearTimeout(this.refreshTimer); clearTimeout(this.persistTimer);
@@ -485,6 +492,7 @@ function activate(context) {
   updates.start();
   context.subscriptions.push(workbench, vscode.window.registerWebviewViewProvider('vscodex.chat', workbench, { webviewOptions: { retainContextWhenHidden: true } }));
   context.subscriptions.push(vscode.commands.registerCommand('vscodex.open', () => workbench.reveal()));
+  context.subscriptions.push(vscode.commands.registerCommand('vscodex.toggleChatList', () => workbench.toggleChatList().catch(error => vscode.window.showErrorMessage(error.message))));
   context.subscriptions.push(vscode.commands.registerCommand('vscodex.switchChat', () => workbench.switchChat().catch(error => vscode.window.showErrorMessage(error.message))));
   for (const [command, side] of [['vscodex.addSelection', false], ['vscodex.askSelection', true]]) {
     context.subscriptions.push(vscode.commands.registerCommand(command, () => workbench.editorQuote(side).catch(e => vscode.window.showErrorMessage(e.message))));
