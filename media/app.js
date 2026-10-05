@@ -103,8 +103,9 @@ if (typeof document !== 'undefined') (() => {
     controls.append(model, effort, permissions);
     if (channel === 'main') controls.append(button('引用编辑器选区', '⌁', () => post('editorQuote')));
     const send = button('发送 (Ctrl+Enter)', '↑', () => submit(channel), 'send'); controls.append(send);
+    const recovery = button('追加上次未发送草稿', '恢复草稿', () => recoverDraft(channel)); recovery.hidden = true; controls.insertBefore(recovery, send);
     const error = el('div', 'inline-error'); error.role = 'alert'; composer.append(error);
-    const pane = panes[channel] = { panel, title, notice, messages, composer, refs, input, model, effort, permissions, send, error, key: null, nodes: new Map() };
+    const pane = panes[channel] = { panel, title, notice, messages, composer, refs, input, model, effort, permissions, send, recovery, error, key: null, nodes: new Map() };
     input.oninput = () => { const draft = getDraft(pane.key); draft.text = input.value; persist(); };
     input.onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(channel); } };
     composer.onsubmit = e => { e.preventDefault(); submit(channel); };
@@ -242,6 +243,13 @@ if (typeof document !== 'undefined') (() => {
     if (explain && !draft.text.trim()) { draft.text = '请解释这个片段，并结合上下文说明。'; pane.input.value = draft.text; }
     persist(); renderReferences(channel); pane.input.focus();
   }
+  function recoverDraft(channel) {
+    const pane = panes[channel]; if (!pane.recoveredDraft) return;
+    const target = getDraft(pane.key), old = pane.recoveredDraft;
+    target.text = [target.text, old.text].filter(Boolean).join('\n\n'); target.references.push(...old.references);
+    pane.input.value = target.text; pane.recoveredDraft = null; pane.recovery.hidden = true;
+    persist(); renderReferences(channel);
+  }
   function submit(channel) {
     const pane = panes[channel]; if (state[channel]?.busy) { post('stop', { channel }); return; }
     if (pending[channel]) return;
@@ -322,6 +330,15 @@ if (typeof document !== 'undefined') (() => {
         if (message.threadId && message.threadId === state.side?.id && !(message.explain && (state.side.busy || pending.side))) consumeSideReference(message);
         else queuedReferences.push(message);
       } else addReference('main', message.reference, message.explain);
+    }
+    if (message.type === 'restoreDraft') {
+      const old = ui.drafts[`main:${message.threadId}`];
+      if (old && (old.text.trim() || old.references.length) && panes.main.key !== `main:${message.threadId}`) {
+        panes.main.recoveredDraft = JSON.parse(JSON.stringify(old));
+        const target = getDraft(panes.main.key);
+        if (!target.text.trim() && !target.references.length) recoverDraft('main');
+        else panes.main.recovery.hidden = false;
+      }
     }
     if (message.type === 'error') {
       const channel = message.channel === 'side' ? 'side' : 'main'; panes[channel].error.textContent = redact(message.message);
