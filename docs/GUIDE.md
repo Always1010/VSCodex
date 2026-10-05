@@ -1,0 +1,86 @@
+# 使用与开发指南
+
+本文维护扩展的配置、交互边界、运行方式和开发验证。项目入口见 [README](../README.md)。
+
+## 加载扩展
+
+需要 VS Code 1.95+、Node.js 20+ 和已安装的 Codex。开发源码不需要安装 npm 包。打开项目后，手动选择“运行 VSCodex 开发宿主”调试配置并按 F5；这会打开一个新的 VS Code 窗口。
+
+也可以运行 `node scripts/package.js`，然后在 VS Code 的扩展菜单选择“从 VSIX 安装”，选择 `artifacts/vscodex-workbench-0.1.0.vsix`。安装和启动由用户手动执行；脚本不修改现有官方扩展。
+
+运行“VSCodex: 打开聊天工作台”，或按 `Ctrl+Alt+C`（macOS 为 `Cmd+Alt+C`）。工作台默认位于底部面板；可用 VS Code 的“移动视图”将其移到侧边栏。
+
+## 连接与账户
+
+工作台启动本机 `codex app-server --listen stdio://`，通过 JSONL 双向通信。优先使用 `vscodex.codexPath` 指定的文件，其次使用已安装官方 Codex 扩展的可执行文件，再查找系统 PATH。不下载、不升级 Codex。
+
+复用当前扩展运行环境中的 Codex 账户和配置。未登录时可点击登录入口，获取设备代码；只有用户选择打开登录页面时才启动外部浏览器。断线后点击刷新重连；客户端不自动重发已经提交的消息，避免重复执行任务。
+
+本地、WSL 和 SSH 各自使用扩展运行所在环境的可执行文件和目录。远端必须已有 Codex，或显式填写远端可执行路径。本地历史不会自动上传到其他机器。
+
+## 项目与聊天
+
+默认仅显示当前 VS Code 工作区对应项目。切换范围可选择“当前项目优先”或“全部项目”。多根工作区中，每个根目录都是当前项目；新建聊天时需明确所属项目。
+
+打开仓库子目录时，通过 Git 根目录识别所属项目。非 Git 目录使用工作区文件夹。项目归属按路径边界和最长匹配判断，不把不同路径的同名目录合并。资源管理器中选中文件或子目录不会改变聊天范围。
+
+额外项目与 worktree 可在 `vscodex.additionalProjects` 配置，例如：
+
+```json
+"vscodex.additionalProjects": [
+  {
+    "name": "VSCodex",
+    "path": "D:\\WRK\\VSCodex",
+    "folders": ["D:\\WRK\\VSCodex-ui-worktree"]
+  }
+]
+```
+
+分组不改变聊天自身的执行目录。跨项目查看聊天时，标题仍展示实际项目路径；点击项目的打开入口会在新的 VS Code 窗口打开目录。
+
+聊天列表读取该 Codex 环境可访问的本地历史，包含 CLI、官方 IDE 和 app-server 来源。不能保证读取官方桌面端所有云端或托管会话，也不复制桌面端项目置顶和排列偏好。扩展自己的聊天置顶记录保存在 VS Code 全局状态中。
+
+左侧导航默认收起。点击导航入口临时展开，选择聊天后收起；固定后占据布局宽度，并可调整大小。聊天标题入口用于快速切换。搜索匹配项目名和聊天名称。
+
+## 引用上下文
+
+选中聊天内容后，可以添加到当前输入框、直接解释或在侧边提问。引用以卡片展示，允许预览、删除和跳回来源。编辑器选区支持右键“添加选中代码到对话”和“在侧边聊天中询问选中代码”。未保存代码使用选中时的文本快照。
+
+引用记录来源及选中文本，发送时随用户问题传入模型。它不是对源聊天全部上下文的隐式共享。每条消息最多 20 个引用，单个引用最多 80,000 字符，整条消息与引用总计最多 160,000 字符；超限会提示缩小范围。
+
+## 侧边讨论与权限
+
+主聊天和侧边聊天分别保留消息、草稿和引用。关闭侧边栏只隐藏视图；任务仍可继续。临时侧边会话默认不出现在主列表，点击保存后成为可选择的独立聊天。
+
+默认侧边后端为 Codex，使用只读沙箱进行项目分析。只读仍允许读取文件和受限制的命令，并不等于完全禁用工具。主聊天可选择只读或工作区写入；发送每轮任务时显式传入对应沙箱与聊天目录，避免继承旧会话的完全访问权限。命令和文件操作需要审批时展示确认卡片；当前客户端只提供单次批准、拒绝或取消，不隐式批准整个会话。未知的工具请求拒绝执行。
+
+普通讨论模式使用 OpenAI Responses API，仅传入文本，不提供本地执行工具。它需要：
+
+1. 将 `vscodex.sideProvider` 设为 `responses`，或在侧边栏选择普通讨论。
+2. 在 `vscodex.discussionModel` 设置当前 API 账户可用的模型 ID。
+3. 运行“VSCodex: 设置普通讨论 API 密钥”。密钥保存在 VS Code SecretStorage，不发送到 Webview，不写入仓库或设置文件。
+
+普通讨论请求使用单独的 API 账户计费，不自动使用 ChatGPT 订阅。普通讨论历史由本扩展维护，不进入官方 ChatGPT 历史。`解释` 自动围绕选区提问，`在侧边聊天中提问` 先附加选区，等待用户输入。侧边回答可引用回主输入框，不自动干预正在执行的主任务。
+
+## 配置
+
+所有设置可通过工作台设置按钮或 VS Code 设置中的 VSCodex 搜索。
+
+| 设置 | 用途 |
+| --- | --- |
+| `vscodex.codexPath` | 当前运行环境的 Codex 可执行文件 |
+| `vscodex.scope` | 项目导航默认范围 |
+| `vscodex.additionalProjects` | 额外项目及目录关联 |
+| `vscodex.model` | Codex 模型，留空使用默认 |
+| `vscodex.effort` | 推理强度 |
+| `vscodex.permissions` | 主聊天只读或工作区写入 |
+| `vscodex.sideProvider` | Codex 项目分析或普通讨论 |
+| `vscodex.discussionModel` | 普通讨论模型 ID |
+
+## 开发验证
+
+`node scripts/check.js` 检查 JavaScript 语法和清单。测试使用 Node 原生 `node:test`，按修改范围选择 `test/backend.test.js`、`test/context.test.js`、`test/discussion.test.js`、`test/bridge.test.js`、`test/frontend.test.js` 或 `test/package.test.js`。不会发出真实模型生成请求。
+
+`node scripts/package.js` 生成零依赖 VSIX 安装包。打包仅收录运行时文件和用户文档，不收录测试、缓存、账户信息或仓库规则。输出保存在被 Git 忽略的 `artifacts/`。
+
+真实 VS Code 扩展宿主、账户推理调用和桌面窗口验证需单独执行；无头测试不能替代这些验证。以当前可执行版本的 app-server schema 为准，升级后先验证协议兼容性。
