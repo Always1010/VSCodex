@@ -136,6 +136,7 @@ if (typeof document !== 'undefined') (() => {
       const toggle = button(`${ui.collapsed[project.id] ? '展开' : '折叠'} ${project.name}`, `${ui.collapsed[project.id] ? '▸' : '▾'} ${project.name}`, () => { ui.collapsed[project.id] = !ui.collapsed[project.id]; persist(); renderTree(); }, 'project-toggle');
       toggle.setAttribute('aria-expanded', String(!ui.collapsed[project.id])); heading.append(toggle);
       if (project.current) heading.append(el('span', 'badge', '当前'));
+      if (project.path) heading.append(button(`在 VS Code 新窗口打开 ${project.name}`, '↗', () => post('openProject', { cwd: project.path })));
       heading.append(button(`在 ${project.name} 新建聊天`, '+', () => post('newChat', { cwd: project.path }))); group.append(heading);
       if (!ui.collapsed[project.id]) for (const thread of project.threads) {
         const row = el('div', 'thread-row'); row.classList.toggle('active', thread.id === state.main?.id);
