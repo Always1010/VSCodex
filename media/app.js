@@ -15,6 +15,10 @@ function sameDraft(a, b) { return !!a && !!b && a.text === b.text && JSON.string
 function snapshotReference(session, message, text) {
   return { text, threadId: session.id, messageId: message.id, sourceTitle: session.title || '聊天', cwd: session.cwd };
 }
+function messageReference(session, id) {
+  const message = session?.messages?.find(item => item.id === id);
+  return message ? snapshotReference(session, message, message.text) : null;
+}
 function markdownBlocks(text) {
   const blocks = []; let code = null;
   for (const line of String(text || '').split('\n')) {
@@ -28,7 +32,7 @@ function markdownBlocks(text) {
   return blocks;
 }
 function redact(text) { return String(text || '').replace(/Bearer\s+\S+|sk-[\w-]+/gi, '[隐藏凭据]'); }
-if (typeof module !== 'undefined') module.exports = { visibleProjects, draftKey, sameDraft, snapshotReference, markdownBlocks, redact };
+if (typeof module !== 'undefined') module.exports = { visibleProjects, draftKey, sameDraft, snapshotReference, messageReference, markdownBlocks, redact };
 
 if (typeof document !== 'undefined') (() => {
   const vscode = acquireVsCodeApi();
@@ -178,7 +182,10 @@ if (typeof document !== 'undefined') (() => {
     for (const message of session?.messages || []) {
       incoming.add(message.id); let entry = pane.nodes.get(message.id);
       if (!entry) { const article = el('article', `message ${message.role}`); article.dataset.messageId = message.id; const label = el('div', 'message-label', message.role === 'user' ? '你' : message.role === 'assistant' ? session?.provider === 'responses' ? '助手' : 'Codex' : '运行信息'); const body = el('div', 'message-body'); article.append(label, body);
-        if (channel === 'side' && message.role === 'assistant') article.append(button('将回答引用到主聊天', '引用到主聊天', () => addReference('main', snapshotReference(session, message, message.text)), 'quote-back'));
+        if (channel === 'side' && message.role === 'assistant') article.append(button('将回答引用到主聊天', '引用到主聊天', () => {
+          const ref = messageReference(state.side, message.id);
+          if (ref && state.side.id === session.id) addReference('main', ref);
+        }, 'quote-back'));
         pane.messages.append(article); entry = { article, body, text: null }; pane.nodes.set(message.id, entry); }
       if (entry.text !== message.text) {
         const blocks = markdownBlocks(message.text);
