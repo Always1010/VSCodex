@@ -6,7 +6,7 @@
 
 需要已有 Node.js 20+、VS Code 1.95+ 和 Codex。项目没有第三方运行依赖，无需执行 `npm install`。
 
-在 VS Code 打开本项目，选择“运行 VSCodex 开发宿主”并按 F5；或运行 `node scripts/package.js` 生成 VSIX 后手动安装。运行“VSCodex: 打开聊天工作台”（`Ctrl+Alt+C`）。
+在 VS Code 打开本项目，选择“运行 VSCodex 开发宿主”并按 F5；或运行 `npm run package` 一次完成打包与安装，已打开的窗口重载后生效。运行“VSCodex: 打开聊天工作台”（`Ctrl+Alt+C`）。
 
 ## 主要功能
 
@@ -15,7 +15,7 @@
 - 聊天文本与编辑器选区引用。
 - 独立侧边项目分析、普通讨论和回答引用。
 - Codex 流式对话、模型与权限选择、单次审批。
-- 固定文件名安装包与本地打包自动更新。
+- 固定文件名安装包，打包后脚本直接安装。
 
 ## 检查
 

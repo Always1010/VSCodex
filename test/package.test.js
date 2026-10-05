@@ -52,7 +52,7 @@ test('固定安装包路径、内部版本自动递增且更新索引匹配完�
     assert.equal(second.sha256, createHash('sha256').update(bytes).digest('hex'));
     assert.ok(bytes.includes(Buffer.from(`"version": "${second.version}"`)));
     assert.ok(bytes.includes(Buffer.from(`Version="${second.version}"`)));
-    assert.ok(bytes.includes(Buffer.from('vscodexLocalUpdates')));
+    assert.equal(bytes.includes(Buffer.from('vscodexLocalUpdates')), false);
     assert.equal(JSON.parse(fs.readFileSync(path.join(base, 'package.json'))).version, first.version);
     fs.writeFileSync(indexPath, '{}');
     assert.throws(() => build(base), /扩展标识不匹配/);
