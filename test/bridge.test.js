@@ -151,3 +151,13 @@ test('打开项目仅接受已识别目录并明确使用新窗口', async () =>
   assert.equal(commands[0][2].forceNewWindow, true);
   workbench.dispose();
 });
+
+test('目录选择接受同一路径的分隔符及大小写形式，不接受相邻目录', async () => {
+  const { workbench } = fixture();
+  const directory = process.platform === 'win32' ? 'C:/Projects/VSCodex' : '/projects/vscodex';
+  workbench.roots = [{ name: '项目', path: directory }];
+  const alternative = process.platform === 'win32' ? 'c:\\projects\\VSCODEX\\.' : '/projects/vscodex/.';
+  assert.equal(await workbench.pickCwd(alternative), directory);
+  await assert.rejects(workbench.pickCwd(directory + '-other'), /已识别/);
+  workbench.dispose();
+});

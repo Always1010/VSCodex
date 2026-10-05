@@ -12,6 +12,7 @@ const { Discussion } = require('./lib/discussion');
 const { renderWebview } = require('./src/webview');
 
 const setting = key => vscode.workspace.getConfiguration('vscodex').get(key);
+const normalizedPath = value => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
 const runGit = cwd => new Promise(resolve => execFile('git', ['-C', cwd, 'rev-parse', '--show-toplevel'],
   { windowsHide: true, timeout: 3000 }, (error, stdout) => resolve(error ? cwd : stdout.trim())));
 
@@ -235,8 +236,10 @@ class Workbench {
   async pickCwd(provided) {
     const known = this.state().projects.filter(p => p.path);
     if (provided) {
-      if (!known.some(p => p.path === provided) && !this.roots.some(r => r.path === provided)) throw new Error('请选择已识别的项目目录。');
-      return provided;
+      if (typeof provided !== 'string') throw new Error('请选择已识别的项目目录。');
+      const selected = [...known, ...this.roots].find(p => normalizedPath(p.path) === normalizedPath(provided));
+      if (!selected) throw new Error('请选择已识别的项目目录。');
+      return selected.path;
     }
     if (this.roots.length === 1) return this.roots[0].path;
     const candidates = this.roots.length ? this.roots : known;
