@@ -1,0 +1,47 @@
+{
+  "name": "vscodex-workbench",
+  "displayName": "VSCodex Workbench",
+  "description": "按项目组织的 Codex 工作台：抽屉导航、上下文引用和侧边讨论。",
+  "version": "0.1.0",
+  "publisher": "vscodex-local",
+  "private": true,
+  "engines": { "vscode": "^1.95.0", "node": ">=20" },
+  "categories": ["AI", "Other"],
+  "extensionKind": ["workspace"],
+  "main": "./extension.js",
+  "activationEvents": ["onView:vscodex.chat"],
+  "capabilities": { "untrustedWorkspaces": { "supported": false, "description": "Codex 可以执行命令和修改工作区，需要先信任工作区。" }, "virtualWorkspaces": false },
+  "scripts": {
+    "check": "node scripts/check.js",
+    "test": "node --test test/*.test.js",
+    "package": "node scripts/package.js"
+  },
+  "contributes": {
+    "viewsContainers": { "panel": [{ "id": "vscodex", "title": "VSCodex", "icon": "media/icon.svg" }] },
+    "views": { "vscodex": [{ "type": "webview", "id": "vscodex.chat", "name": "聊天工作台" }] },
+    "commands": [
+      { "command": "vscodex.open", "title": "VSCodex: 打开聊天工作台" },
+      { "command": "vscodex.addSelection", "title": "VSCodex: 添加选中代码到对话" },
+      { "command": "vscodex.askSelection", "title": "VSCodex: 在侧边聊天中询问选中代码" },
+      { "command": "vscodex.setApiKey", "title": "VSCodex: 设置普通讨论 API 密钥" }
+    ],
+    "menus": { "editor/context": [
+      { "command": "vscodex.addSelection", "when": "editorHasSelection", "group": "vscodex@1" },
+      { "command": "vscodex.askSelection", "when": "editorHasSelection", "group": "vscodex@2" }
+    ] },
+    "keybindings": [{ "command": "vscodex.open", "key": "ctrl+alt+c", "mac": "cmd+alt+c" }],
+    "configuration": {
+      "title": "VSCodex",
+      "properties": {
+        "vscodex.codexPath": { "type": "string", "default": "", "description": "Codex 可执行文件路径。留空时查找官方扩展携带的 Codex 或系统 PATH；不自动安装。" },
+        "vscodex.scope": { "type": "string", "enum": ["current", "priority", "all"], "enumDescriptions": ["仅当前项目", "当前项目优先", "全部项目"], "default": "current", "description": "项目导航的默认范围。" },
+        "vscodex.additionalProjects": { "type": "array", "items": { "type": "object", "required": ["name", "path"], "properties": { "name": { "type": "string" }, "path": { "type": "string" }, "folders": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false }, "default": [], "description": "额外项目与子目录或 worktree 的显式关联；路径属于当前扩展运行环境。" },
+        "vscodex.model": { "type": "string", "default": "", "description": "新 Codex 对话的模型。留空使用 Codex 默认模型。" },
+        "vscodex.effort": { "type": "string", "enum": ["low", "medium", "high"], "default": "medium", "description": "Codex 推理强度。" },
+        "vscodex.permissions": { "type": "string", "enum": ["read-only", "workspace-write"], "default": "workspace-write", "description": "主聊天权限，命令和文件操作仍按 Codex 审批请求确认。" },
+        "vscodex.sideProvider": { "type": "string", "enum": ["codex", "responses"], "default": "codex", "description": "侧边聊天后端。Codex 为只读项目分析；Responses 为不提供工具的普通讨论，需要单独的 API 密钥。" },
+        "vscodex.discussionModel": { "type": "string", "default": "", "description": "普通讨论的 OpenAI API 模型 ID。使用 Responses 后端前必须明确设置。" }
+      }
+    }
+  }
+}

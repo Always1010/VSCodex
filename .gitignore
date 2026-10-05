@@ -1,0 +1,7 @@
+node_modules/
+.cache/
+artifacts/
+*.vsix
+*.log
+coverage/
+.DS_Store
