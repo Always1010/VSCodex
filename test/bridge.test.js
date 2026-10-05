@@ -53,6 +53,26 @@ test('发送时聊天切换不会重定向任务，过期目标和重复提交�
   assert.deepEqual(calls, ['a']); assert.equal(sent.at(-1).threadId, 'a');
   workbench.dispose();
 });
+test('创建侧边时切换主聊天不重定向引用，取消新聊天选择解除提交', async () => {
+  const { workbench, sent } = fixture(); let release;
+  const sessions = new Map(['a', 'b'].map(id => [id, { id, title: id, cwd: `/${id}`, messages: [] }]));
+  workbench.activeId = 'a';
+  workbench.store = { get: id => sessions.get(id), start: () => new Promise(resolve => { release = resolve; }) };
+  const first = workbench.openSide({ text: '甲的引用' });
+  await Promise.resolve(); await Promise.resolve();
+  const second = workbench.openSide({ text: '后续引用' });
+  workbench.activeId = 'b'; workbench.sideId = 'side-b';
+  await assert.rejects(workbench.openSide({ text: '乙的引用' }), /另一聊天/);
+  const side = { id: 'side-a', title: '分析', cwd: '/a', messages: [], provider: 'codex' };
+  release(side); await first; await second;
+  assert.equal(workbench.sideId, 'side-b'); assert.equal(workbench.sideByParent.a, 'side-a');
+  assert.equal(sent.filter(m => m.type === 'addReference').every(m => m.threadId === 'side-a'), true);
+  workbench.activeId = null; workbench.newChat = async () => {};
+  await assert.rejects(workbench.send({ channel: 'main', text: '问题' }), /未选择发送目标/);
+  assert.equal(workbench.pendingSends.size, 0);
+  workbench.dispose();
+});
+
 test('审批仅响应用户当前选择，不授予会话级权限，未知请求拒绝执行', () => {
   const { workbench } = fixture(); const results = [];
   workbench.rpc = { respond: (...args) => results.push(args), respondError: (...args) => results.push(args), close() {} };

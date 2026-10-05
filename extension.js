@@ -271,7 +271,7 @@ class Workbench {
     if (channel === 'side' && !this.sideId) await this.openSide();
     if (channel === 'main' && !this.activeId) await this.newChat();
     const session = this.session(capturedId || (channel === 'side' ? this.sideId : this.activeId));
-    if (!session) return;
+    if (!session) throw new Error('未选择发送目标，草稿已保留。');
     if (session.provider === 'responses') {
       const promise = this.discussion.send(session, message.text, refs, { apiKey: await this.context.secrets.get('discussionApiKey'), model: setting('discussionModel') });
       if (session.busy) this.view?.webview.postMessage({ type: 'sent', channel, threadId: session.id });
@@ -285,12 +285,14 @@ class Workbench {
   }
   async openSide(rawReference, explain = false) {
     if (this.pendingSide) {
-      await this.pendingSide;
-      if (rawReference && this.sideId) this.view?.webview.postMessage({ type: 'addReference', threadId: this.sideId, channel: 'side', reference: reference(rawReference), explain });
-      return;
+      if (this.activeId !== this.pendingSideParent) throw new Error('另一聊天的侧边窗口正在创建，请稍后重试。');
+      const session = await this.pendingSide;
+      if (rawReference && session) this.view?.webview.postMessage({ type: 'addReference', threadId: session.id, channel: 'side', reference: reference(rawReference), explain });
+      return session;
     }
+    this.pendingSideParent = this.activeId;
     this.pendingSide = this.openSideOnce(rawReference, explain);
-    try { await this.pendingSide; } finally { this.pendingSide = null; }
+    try { return await this.pendingSide; } finally { this.pendingSide = null; this.pendingSideParent = null; }
   }
   async openSideOnce(rawReference, explain = false) {
     if (rawReference) reference(rawReference);
@@ -314,11 +316,13 @@ class Workbench {
       this.sideByParent[parent.id] = session.id; await this.persist();
     }
     this.hiddenSides.add(session.id); await this.persist();
-    this.sideId = session.id; this.publish();
+    if (this.activeId === parent.id) this.sideId = session.id;
+    this.publish();
     if (rawReference) {
       const ref = reference(rawReference);
       this.view?.webview.postMessage({ type: 'addReference', channel: 'side', threadId: session.id, reference: ref, explain });
     }
+    return session;
   }
   async saveSide() {
     const session = this.session(this.sideId); if (!session) return;
