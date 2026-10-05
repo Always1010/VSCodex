@@ -1,5 +1,7 @@
 # VSCodex Workbench
 
+> **项目已废弃**：本项目不再维护或更新，仓库内容仅供历史参考。
+
 面向 VS Code 的个人 Codex 客户端，按项目管理聊天，使用本机已有的 `codex app-server`。
 
 ## 开发启动
