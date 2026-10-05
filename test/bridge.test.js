@@ -209,3 +209,24 @@ test('无关配置变化不重置聊天权限、模型或项目范围', async ()
   assert.equal(workbench.options.permissions, 'workspace-write'); assert.equal(workbench.scope, 'all');
   workbench.dispose(); setup.workbench.dispose();
 });
+
+test('连接初始化尚未完成时重入连接仍等待账户、模型和历史恢复', async () => {
+  const { EventEmitter } = require('node:events'); let release; let reachedModel;
+  const modelEntered = new Promise(resolve => { reachedModel = resolve; });
+  class Rpc extends EventEmitter {
+    async connect() {}
+    async request(method) {
+      if (method === 'thread/list') return { data: [] };
+      if (method === 'account/read') return { account: null };
+      if (method === 'model/list') { reachedModel(); return new Promise(resolve => { release = () => resolve({ data: [] }); }); }
+      throw new Error(method);
+    }
+    close() {}
+  }
+  const { workbench } = fixture({ './lib/rpc': { RpcClient: Rpc } });
+  workbench.connection = 'offline'; workbench.readRoots = async () => {}; workbench.executable = () => 'test';
+  const first = workbench.connect(); await modelEntered;
+  let completed = false; const second = workbench.connect().then(() => { completed = true; });
+  await Promise.resolve(); await Promise.resolve(); assert.equal(completed, false);
+  release(); await first; await second; assert.equal(completed, true); workbench.dispose();
+});

@@ -75,8 +75,8 @@ class Workbench {
     return 'codex';
   }
   async connect() {
-    if (this.connection === 'ready') return;
     if (this.connecting) return this.connecting;
+    if (this.connection === 'ready') return;
     this.connecting = this.connectOnce().finally(() => { this.connecting = null; });
     return this.connecting;
   }
