@@ -487,8 +487,15 @@ function activate(context) {
   context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => workbench.readRoots().then(() => workbench.publish())));
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => {
     if (!event.affectsConfiguration('vscodex')) return;
-    workbench.options = { ...workbench.options, model: setting('model') || '', effort: setting('effort') || 'medium', permissions: setting('permissions') || 'workspace-write', sideProvider: setting('sideProvider') || 'codex' };
-    workbench.scope = setting('scope') || 'current'; workbench.publish();
+    const defaults = { model: '', effort: 'medium', permissions: 'workspace-write', sideProvider: 'codex' };
+    for (const [key, fallback] of Object.entries(defaults)) {
+      if (event.affectsConfiguration(`vscodex.${key}`)) workbench.options[key] = setting(key) || fallback;
+    }
+    if (event.affectsConfiguration('vscodex.scope')) {
+      workbench.scope = setting('scope') || 'current';
+      context.workspaceState.update('scope', workbench.scope).catch(error => workbench.notifyError(error));
+    }
+    workbench.publish();
   }));
 }
 module.exports = { activate, Workbench };
