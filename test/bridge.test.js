@@ -16,7 +16,7 @@ function fixture() {
     workspace: { getConfiguration: () => ({ get: key => values[key] }), workspaceFolders: [] },
     window: { createOutputChannel: () => ({ appendLine() {}, dispose() {} }) },
     extensions: { getExtension: () => undefined }, commands: { executeCommand: async (...args) => commands.push(args) },
-    Uri: { parse: value => { const url = new URL(value); return { scheme: url.protocol.slice(0, -1), authority: url.host, fsPath: decodeURIComponent(url.pathname) }; } }
+    Uri: { file: value => ({ scheme: 'file', fsPath: value }), parse: value => { const url = new URL(value); return { scheme: url.protocol.slice(0, -1), authority: url.host, fsPath: decodeURIComponent(url.pathname) }; } }
   };
   const module = { exports: {} }; const requireFile = createRequire(path.join(root, 'extension.js'));
   vm.runInNewContext(fs.readFileSync(path.join(root, 'extension.js'), 'utf8'), { require: name => name === 'vscode' ? vscode : requireFile(name), module, setTimeout, clearTimeout, process, console });
@@ -114,5 +114,17 @@ test('跳转文件拒绝命令 URI，临时侧边历史不会出现在项目主�
   assert.ok(ids.includes('normal')); assert.equal(ids.includes('old-side'), false);
   workbench.savedSides.add('old-side');
   assert.ok(workbench.state().projects.flatMap(p => p.threads).some(t => t.id === 'old-side'));
+  workbench.dispose();
+});
+
+test('打开项目仅接受已识别目录并明确使用新窗口', async () => {
+  const { workbench, commands } = fixture();
+  workbench.roots = [{ name: '项目', path: '/known' }];
+  // This fixture replaces the VS Code command bridge; no window is started.
+  await assert.rejects(workbench.handle({ type: 'openProject', cwd: '/unknown' }), /未知项目/);
+  assert.equal(commands.length, 0);
+  await workbench.handle({ type: 'openProject', cwd: '/known' });
+  assert.equal(commands[0][0], 'vscode.openFolder'); assert.equal(commands[0][1].fsPath, '/known');
+  assert.equal(commands[0][2].forceNewWindow, true);
   workbench.dispose();
 });
