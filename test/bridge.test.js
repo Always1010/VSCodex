@@ -8,14 +8,14 @@ const { createRequire } = require('node:module');
 const root = path.resolve(__dirname, '..');
 function fixture(dependencies = {}, workspaceValues = {}) {
   const values = { scope: 'current', effort: 'medium', permissions: 'workspace-write', sideProvider: 'codex', additionalProjects: [] };
-  const memory = new Map(); const sent = []; const commands = [];
+  const memory = new Map(); const sent = []; const commands = []; const registered = {};
   const context = { extensionPath: root, subscriptions: [],
     globalState: { get: (k, fallback) => memory.get(k) ?? fallback, update: async (k, v) => memory.set(k, structuredClone(v)) },
     workspaceState: { get: (key, fallback) => workspaceValues[key] ?? fallback, update: async (key, value) => { workspaceValues[key] = value; } }, secrets: { get: async () => 'fake' } };
   const vscode = {
-    workspace: { getConfiguration: () => ({ get: key => values[key] }), workspaceFolders: [] },
-    window: { createOutputChannel: () => ({ appendLine() {}, dispose() {} }) },
-    extensions: { getExtension: () => undefined }, commands: { executeCommand: async (...args) => commands.push(args) },
+    workspace: { getConfiguration: () => ({ get: key => values[key] }), workspaceFolders: [], onDidChangeWorkspaceFolders: () => ({ dispose() {} }), onDidChangeConfiguration: callback => { registered.configuration = callback; return { dispose() {} }; } },
+    window: { createOutputChannel: () => ({ appendLine() {}, dispose() {} }), registerWebviewViewProvider: (_, provider) => { registered.workbench = provider; return { dispose() {} }; } },
+    extensions: { getExtension: () => undefined }, commands: { executeCommand: async (...args) => commands.push(args), registerCommand: () => ({ dispose() {} }) },
     Uri: { file: value => ({ scheme: 'file', fsPath: value }), parse: value => { const url = new URL(value); return { scheme: url.protocol.slice(0, -1), authority: url.host, fsPath: decodeURIComponent(url.pathname) }; } }
   };
   const module = { exports: {} }; const requireFile = createRequire(path.join(root, 'extension.js'));
@@ -23,7 +23,7 @@ function fixture(dependencies = {}, workspaceValues = {}) {
   const workbench = new module.exports.Workbench(context);
   workbench.view = { webview: { postMessage: message => sent.push(message) } };
   workbench.connection = 'ready';
-  return { workbench, values, memory, sent, commands, vscode };
+  return { workbench, values, memory, sent, commands, vscode, context, registered, activate: module.exports.activate };
 }
 test('侧边发送固定只读、主聊天保留自己的执行目录，筛选不会改变发送目标', async () => {
   const { workbench, sent } = fixture(); const calls = [];
@@ -198,4 +198,14 @@ test('记住已选择聊天，重开时恢复；失效历史不阻断连接', as
   invalid.connection = 'offline'; invalid.readRoots = async () => {}; invalid.executable = () => 'test';
   await invalid.connect(); assert.equal(invalid.connection, 'ready'); assert.equal(invalid.activeId, null);
   assert.equal(workspaceValues.activeThread, null); invalid.dispose();
+});
+
+test('无关配置变化不重置聊天权限、模型或项目范围', async () => {
+  const setup = fixture(); setup.activate(setup.context); const workbench = setup.registered.workbench;
+  workbench.options.permissions = 'read-only'; workbench.options.model = 'my-model'; workbench.scope = 'all';
+  setup.registered.configuration({ affectsConfiguration: key => key === 'vscodex' || key === 'vscodex.discussionModel' });
+  assert.equal(workbench.options.permissions, 'read-only'); assert.equal(workbench.options.model, 'my-model'); assert.equal(workbench.scope, 'all');
+  setup.registered.configuration({ affectsConfiguration: key => key === 'vscodex' || key === 'vscodex.permissions' });
+  assert.equal(workbench.options.permissions, 'workspace-write'); assert.equal(workbench.scope, 'all');
+  workbench.dispose(); setup.workbench.dispose();
 });
