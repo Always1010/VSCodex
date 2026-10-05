@@ -231,3 +231,19 @@ test('连接初始化尚未完成时重入连接仍等待账户、模型和历�
   await Promise.resolve(); await Promise.resolve(); assert.equal(completed, false);
   release(); await first; await second; assert.equal(completed, true); workbench.dispose();
 });
+
+test('保存的 Codex 侧边可按主聊天权限执行，侧边发送仍只读', async () => {
+  const { workbench } = fixture(); const calls = [];
+  const main = { id: 'a', title: '任务', cwd: '/a', messages: [] };
+  const side = { id: 'b', title: '分析', cwd: '/a', messages: [], provider: 'codex', side: true };
+  const sessions = new Map([['a', main], ['b', side]]);
+  workbench.activeId = 'a'; workbench.sideId = 'b';
+  workbench.store = { sessions, get: id => sessions.get(id), list: async () => [], send: async (...args) => calls.push(args) };
+  workbench.rpc = { request: async () => ({}), close() {} };
+  await workbench.saveSide(); assert.equal(side.side, false); assert.ok(workbench.savedSides.has('b'));
+  await workbench.send({ channel: 'side', threadId: 'b', text: '解释' });
+  assert.equal(calls[0][2].permissions, 'read-only');
+  workbench.activeId = 'b'; workbench.sideId = null;
+  await workbench.send({ channel: 'main', threadId: 'b', text: '继续' });
+  assert.equal(calls[1][2].permissions, 'workspace-write'); workbench.dispose();
+});
