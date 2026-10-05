@@ -6,19 +6,19 @@
 
 需要 VS Code 1.95+、Node.js 20+ 和已安装的 Codex。开发源码不需要安装 npm 包。打开项目后，手动选择“运行 VSCodex 开发宿主”调试配置并按 F5；这会打开一个新的 VS Code 窗口。
 
-也可以运行 `node scripts/package.js`，然后在 VS Code 的扩展菜单选择“从 VSIX 安装”，选择固定文件名 `artifacts/vscodex-workbench.vsix`。首次安装或从旧版升级到支持自动更新的这一版，需要手动安装一次并重新加载窗口。后续更新见下文；不修改现有官方扩展。
+也可以运行 `npm run package`（或 `node scripts/package.js`），一次完成打包和安装，固定文件名为 `artifacts/vscodex-workbench.vsix`。已打开的 VS Code 窗口需重新加载后使用新版。只生成安装包时运行 `npm run package:only`，再通过“从 VSIX 安装”手动安装。
 
 运行“VSCodex: 打开聊天工作台”，或按 `Ctrl+Alt+C`（macOS 为 `Cmd+Alt+C`）。工作台默认位于底部面板；可用 VS Code 的“移动视图”将其移到侧边栏。
 
-## 本地自动更新
+## 打包后安装
 
-正式安装的扩展默认在 VS Code 启动后检查一次，并每 30 秒检查安装包记录的打包目录。以后在原仓库运行 `npm run package` 即可：新包生成完整、校验通过且内部版本高于已安装版本时，自动安装新版，不再选择 VSIX 或输入路径。VS Code 关闭期间生成的新包，会在下次启动时检查。
+每次运行 `npm run package`，脚本先生成完整 VSIX 和索引，再校验安装包并调用已有 VS Code CLI 的 `--install-extension <安装包路径> --force`。安装时使用已校验的临时副本，避免另一次打包替换正在读取的文件，安装结束后清理副本。打包失败不会安装；安装失败保留 VSIX 并返回非零退出码，可运行 `npm run install:local` 重试。无需每次选择文件或输入安装路径。扩展没有后台更新检查、启动检查或定时轮询。
 
-安装完成后提示“重新加载窗口”，点击后新版生效。扩展不会自动重载，避免打断聊天或未保存编辑。建议先等当前任务完成再点击；可以关闭提示，稍后自行重载。未重载时不会重复安装同一版，但仍可安装更高版本。
+安装脚本不打开 VS Code 窗口，也不自动重载。VS Code 已打开时，请等当前任务结束后运行“开发人员: 重新加载窗口”；关闭状态下安装后，下次打开即可使用新版。从带有轮询的旧版升级时，也需重载一次才能停止旧版内存中的计时器。原扩展的配置、密钥和聊天状态仍使用相同扩展标识。
 
-可运行“VSCodex: 检查本地更新”立即检查。`vscodex.autoUpdate` 可关闭自动检查；手动检查仍然可用。仓库移动或换机器后，只需在本机设置中将 `vscodex.updateSource` 改成新的 `artifacts` 目录一次，同时保留 VSIX 和 `.update.json`。目录不存在时保持现有版本；失败自动重试，详情写入 VSCodex 输出频道。
+脚本优先使用 `VSCODE_CLI` 指定的已有命令路径，否则从 PATH 查找 `code` 或 `code-insiders`，Windows 还检查常见安装目录。Windows 使用 `bin/code.cmd` 中记录的可执行文件和 CLI 入口，兼容版本目录布局，避免 Shell 拼接路径。脚本不安装 VS Code、不修改 PATH，也不下载工具。多版本环境可设置 `VSCODE_CLI` 选择目标；安装作用于该 CLI 的默认配置文件。自定义 profile、WSL 或 SSH 需自行在对应环境安装。
 
-这是本机打包目录更新，VSIX 记录本机绝对路径，不从互联网下载。开发宿主、WSL 和 SSH 不执行自动安装；远端仍需在对应环境手动安装。安装调用 VS Code 的扩展安装命令，校验后使用临时副本，避免再次打包影响正在进行的安装；现有 VS Code 配置、密钥和聊天状态仍沿用原扩展标识。
+仓库移动后，脚本根据自身目录确定安装包位置，不再保存更新源绝对路径。旧版的 `vscodex.autoUpdate`、`vscodex.updateSource` 设置和“检查本地更新”命令已移除。
 
 ## 连接与账户
 
@@ -90,8 +90,6 @@ Codex 尚未保存历史的新空会话可能无法跨重启恢复。此时工�
 
 | 设置 | 用途 |
 | --- | --- |
-| `vscodex.autoUpdate` | 自动检查并安装本地新版，默认开启 |
-| `vscodex.updateSource` | 更新目录，留空使用安装包记录的本机目录 |
 | `vscodex.codexPath` | 当前运行环境的 Codex 可执行文件 |
 | `vscodex.scope` | 项目导航默认范围 |
 | `vscodex.additionalProjects` | 额外项目及目录关联 |
@@ -103,10 +101,10 @@ Codex 尚未保存历史的新空会话可能无法跨重启恢复。此时工�
 
 ## 开发验证
 
-`node scripts/check.js` 检查 JavaScript 语法和清单。测试使用 Node 原生 `node:test`，按修改范围选择 `test/backend.test.js`、`test/context.test.js`、`test/discussion.test.js`、`test/bridge.test.js`、`test/frontend.test.js`、`test/package.test.js` 或 `test/updates.test.js`。不会发出真实模型生成请求。
+`node scripts/check.js` 检查 JavaScript 语法和清单。测试使用 Node 原生 `node:test`，按修改范围选择 `test/backend.test.js`、`test/context.test.js`、`test/discussion.test.js`、`test/bridge.test.js`、`test/frontend.test.js`、`test/package.test.js` 或 `test/install.test.js`。不会发出真实模型生成请求；安装测试使用替身，不修改已安装扩展。
 
-`node scripts/package.js`（或 `npm run package`）生成零依赖 VSIX 安装包，固定覆盖 `artifacts/vscodex-workbench.vsix`，同时生成 `.update.json` 更新索引。打包仅收录运行时文件和用户文档，不收录测试、缓存、账户信息或仓库规则。输出保存在被 Git 忽略的 `artifacts/`。
+`npm run package:only` 生成零依赖 VSIX 安装包，固定覆盖 `artifacts/vscodex-workbench.vsix`，同时生成 `.update.json` 打包索引。`npm run package` 在此基础上安装扩展。打包仅收录运行时文件和用户文档，不收录测试、缓存、账户信息或仓库规则。输出保存在被 Git 忽略的 `artifacts/`。
 
-文件名没有版本号；VSIX 内部保留版本。源码或文档变化时，脚本基于更新索引自动递增内部补丁版本，无变化时复用版本，不修改源码 `package.json`。请保留更新索引，以便版本连续递增；清空 `artifacts/` 后，需将源码版本提高到已安装版本以上再打包。安装包内保存本机打包目录，适合本地开发更新。
+文件名没有版本号；VSIX 内部保留版本。源码或文档变化时，脚本基于打包索引自动递增内部补丁版本，无变化时复用版本，不修改源码 `package.json`。请保留打包索引，以便版本连续递增；清空 `artifacts/` 后，需将源码版本提高到已安装版本以上再打包。
 
 真实 VS Code 扩展宿主、账户推理调用和桌面窗口验证需单独执行；无头测试不能替代这些验证。以当前可执行版本的 app-server schema 为准，升级后先验证协议兼容性。

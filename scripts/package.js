@@ -77,12 +77,21 @@ function build(base = root) {
     if (previous.extensionId !== extensionId) throw new Error('更新索引的扩展标识不匹配，未覆盖安装包。');
     if (compareVersions(previous.version, version) >= 0) version = previous.sourceHash === sourceHash ? previous.version : nextVersion(previous.version);
   }
-  const { entries } = buildEntries(base, { ...manifest, version, vscodexLocalUpdates: { source: dir, sourceHash } });
+  const { entries } = buildEntries(base, { ...manifest, version });
   const bytes = zip(entries);
   atomicWrite(destination, bytes);
   atomicWrite(indexPath, JSON.stringify({ extensionId, version, sourceHash, file: path.basename(destination), sha256: createHash('sha256').update(bytes).digest('hex') }, null, 2) + '\n');
   console.log(`已生成 ${destination}（内部版本 ${version}，${entries.length} 个文件）`);
   return destination;
 }
-if (require.main === module) build();
-module.exports = { zip, crc32, buildEntries, build };
+function run(args = process.argv.slice(2), { buildPackage = build, installPackage = require('./install').install } = {}) {
+  if (args.some(arg => arg !== '--no-install')) throw new Error('用法：node scripts/package.js [--no-install]');
+  const destination = buildPackage();
+  if (!args.includes('--no-install')) installPackage(destination);
+  return destination;
+}
+if (require.main === module) {
+  try { run(); }
+  catch (error) { console.error(error.message); process.exitCode = 1; }
+}
+module.exports = { zip, crc32, buildEntries, build, run };

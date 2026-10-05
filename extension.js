@@ -10,7 +10,6 @@ const { groupProjects } = require('./lib/projects');
 const { reference, composeInput } = require('./lib/context');
 const { Discussion } = require('./lib/discussion');
 const { renderWebview } = require('./src/webview');
-const { LocalUpdates } = require('./lib/local-updates');
 
 const setting = key => vscode.workspace.getConfiguration('vscodex').get(key);
 const normalizedPath = value => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
@@ -487,9 +486,6 @@ class Workbench {
 
 function activate(context) {
   const workbench = new Workbench(context);
-  const updates = new LocalUpdates(vscode, context, workbench.output);
-  context.subscriptions.push(updates, vscode.commands.registerCommand('vscodex.checkForUpdates', () => updates.check(true)));
-  updates.start();
   context.subscriptions.push(workbench, vscode.window.registerWebviewViewProvider('vscodex.chat', workbench, { webviewOptions: { retainContextWhenHidden: true } }));
   context.subscriptions.push(vscode.commands.registerCommand('vscodex.open', () => workbench.reveal()));
   context.subscriptions.push(vscode.commands.registerCommand('vscodex.toggleChatList', () => workbench.toggleChatList().catch(error => vscode.window.showErrorMessage(error.message))));
