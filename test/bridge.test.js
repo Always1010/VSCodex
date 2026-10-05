@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createRequire } = require('node:module');
 const root = path.resolve(__dirname, '..');
-function fixture() {
+function fixture(dependencies = {}) {
   const values = { scope: 'current', effort: 'medium', permissions: 'workspace-write', sideProvider: 'codex', additionalProjects: [] };
   const memory = new Map(); const sent = []; const commands = [];
   const context = { extensionPath: root, subscriptions: [],
@@ -19,7 +19,7 @@ function fixture() {
     Uri: { file: value => ({ scheme: 'file', fsPath: value }), parse: value => { const url = new URL(value); return { scheme: url.protocol.slice(0, -1), authority: url.host, fsPath: decodeURIComponent(url.pathname) }; } }
   };
   const module = { exports: {} }; const requireFile = createRequire(path.join(root, 'extension.js'));
-  vm.runInNewContext(fs.readFileSync(path.join(root, 'extension.js'), 'utf8'), { require: name => name === 'vscode' ? vscode : requireFile(name), module, setTimeout, clearTimeout, process, console });
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'extension.js'), 'utf8'), { require: name => name === 'vscode' ? vscode : dependencies[name] || requireFile(name), module, setTimeout, clearTimeout, process, console });
   const workbench = new module.exports.Workbench(context);
   workbench.view = { webview: { postMessage: message => sent.push(message) } };
   workbench.connection = 'ready';
@@ -103,6 +103,29 @@ test('无法找到 Codex 时连接进入可重试错误状态，不停留在连�
   workbench.executable = () => { throw new Error('没有可执行文件'); };
   await assert.rejects(workbench.connect(), /没有可执行/);
   assert.equal(workbench.connection, 'error'); assert.equal(workbench.connecting, null);
+  workbench.dispose();
+});
+
+test('历史列表读取失败不阻断已连接的账户、模型和新聊天入口', async () => {
+  const { EventEmitter } = require('node:events');
+  class Rpc extends EventEmitter {
+    async connect() {}
+    async request(method) {
+      if (method === 'thread/list') throw new Error('列表超时');
+      if (method === 'account/read') return { account: { type: 'chatgpt' } };
+      if (method === 'model/list') return { data: [{ model: 'test-model' }] };
+      if (method === 'thread/start') return { thread: { id: 'new', cwd: '/known', turns: [] } };
+      throw new Error('unexpected method');
+    }
+    close() {}
+  }
+  const { workbench } = fixture({ './lib/rpc': { RpcClient: Rpc } });
+  workbench.connection = 'offline'; workbench.executable = () => 'test';
+  workbench.readRoots = async () => { workbench.roots = [{ path: '/known', workspacePath: '/known', name: '项目' }]; };
+  await workbench.connect();
+  assert.equal(workbench.connection, 'ready'); assert.match(workbench.error, /列表读取失败/);
+  assert.equal(workbench.models[0].id, 'test-model'); assert.match(workbench.accountLabel, /ChatGPT/);
+  await workbench.newChat('/known'); assert.equal(workbench.activeId, 'new');
   workbench.dispose();
 });
 test('跳转文件拒绝命令 URI，临时侧边历史不会出现在项目主列表', async () => {
