@@ -20,7 +20,9 @@ class Workbench {
   constructor(context) {
     this.context = context; this.connection = 'offline'; this.error = ''; this.roots = []; this.threads = [];
     this.models = []; this.accountLabel = '未连接'; this.scope = context.workspaceState.get('scope', setting('scope') || 'current');
-    this.activeId = null; this.sideId = null; this.sideByParent = context.globalState.get('sideByParent', {});
+    this.activeId = context.workspaceState.get('activeThread', null); this.sideId = null; this.sideByParent = context.globalState.get('sideByParent', {});
+    if (typeof this.activeId !== 'string') this.activeId = null;
+    this.sideId = this.sideByParent[this.activeId] || null;
     this.pins = context.globalState.get('pins', {}); this.savedSides = new Set(context.globalState.get('savedSides', []));
     this.hiddenSides = new Set(context.globalState.get('hiddenSides', Object.values(this.sideByParent)));
     this.discussions = new Map(context.globalState.get('discussions', []).map(s => [s.id, { ...s, busy: false, turnId: null }]));
@@ -116,8 +118,14 @@ class Workbench {
       await this.refreshAccount();
       const listed = await rpc.request('model/list', {});
       this.models = (listed.data || []).map(m => ({ id: m.model || m.id, displayName: m.displayName || m.model || m.id, supportedReasoningEfforts: m.supportedReasoningEfforts }));
-      if (this.activeId && !this.discussions.has(this.activeId)) await this.store.resume(this.activeId, { sandbox: this.options.permissions, approvalPolicy: 'on-request' });
-      if (this.sideId && !this.discussions.has(this.sideId)) await this.store.resume(this.sideId, { sandbox: 'read-only', approvalPolicy: 'on-request' });
+      if (this.activeId && !this.discussions.has(this.activeId)) {
+        try { await this.store.resume(this.activeId, { sandbox: this.options.permissions, approvalPolicy: 'on-request' }); }
+        catch (error) { this.activeId = null; this.sideId = null; await this.context.workspaceState.update('activeThread', null); this.notifyError(new Error('上次聊天无法恢复，可重新选择聊天。' + error.message)); }
+      }
+      if (this.sideId && !this.discussions.has(this.sideId)) {
+        try { await this.store.resume(this.sideId, { sandbox: 'read-only', approvalPolicy: 'on-request' }); }
+        catch (error) { this.sideId = null; this.notifyError(error, 'side'); }
+      }
       this.publish();
     } catch (error) {
       this.connection = 'error'; this.error = error.message; this.publish(); throw error;
@@ -250,7 +258,8 @@ class Workbench {
   async newChat(cwd) {
     await this.connect(); cwd = await this.pickCwd(cwd); if (!cwd) return;
     const session = await this.store.start(cwd, { ...this.options });
-    this.activeId = session.id; this.sideId = null; this.publish();
+    this.activeId = session.id; this.sideId = null;
+    await this.context.workspaceState.update('activeThread', this.activeId); this.publish();
   }
   async switchChat() {
     await this.connect();
@@ -271,7 +280,8 @@ class Workbench {
     const available = this.state().projects.flatMap(p => p.threads).some(t => t.id === id);
     if (!available) throw new Error('聊天不存在或已经归档。');
     if (!this.discussions.has(id)) { await this.connect(); await this.store.resume(id, { sandbox: this.options.permissions, approvalPolicy: 'on-request' }); }
-    this.activeId = id; this.sideId = this.sideByParent[id] || null; this.publish();
+    this.activeId = id; this.sideId = this.sideByParent[id] || null;
+    await this.context.workspaceState.update('activeThread', this.activeId); this.publish();
     if (this.sideId && !this.session(this.sideId)) {
       try { await this.store.resume(this.sideId, { sandbox: 'read-only', approvalPolicy: 'on-request' }); }
       catch (error) { this.sideId = null; this.notifyError(error, 'side'); }
@@ -375,7 +385,7 @@ class Workbench {
     if (session?.provider === 'responses') this.savedSides.delete(id);
     else { await this.connect(); await this.rpc.request('thread/archive', { threadId: id }); this.store.sessions.delete(id); }
     for (const [parent, side] of Object.entries(this.sideByParent)) if (side === id) delete this.sideByParent[parent];
-    if (this.activeId === id) { this.activeId = null; this.sideId = null; }
+    if (this.activeId === id) { this.activeId = null; this.sideId = null; await this.context.workspaceState.update('activeThread', null); }
     if (this.sideId === id) this.sideId = null;
     await this.persist(); await this.refresh();
   }

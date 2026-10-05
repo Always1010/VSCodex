@@ -6,12 +6,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createRequire } = require('node:module');
 const root = path.resolve(__dirname, '..');
-function fixture(dependencies = {}) {
+function fixture(dependencies = {}, workspaceValues = {}) {
   const values = { scope: 'current', effort: 'medium', permissions: 'workspace-write', sideProvider: 'codex', additionalProjects: [] };
   const memory = new Map(); const sent = []; const commands = [];
   const context = { extensionPath: root, subscriptions: [],
     globalState: { get: (k, fallback) => memory.get(k) ?? fallback, update: async (k, v) => memory.set(k, structuredClone(v)) },
-    workspaceState: { get: (_, fallback) => fallback, update: async () => {} }, secrets: { get: async () => 'fake' } };
+    workspaceState: { get: (key, fallback) => workspaceValues[key] ?? fallback, update: async (key, value) => { workspaceValues[key] = value; } }, secrets: { get: async () => 'fake' } };
   const vscode = {
     workspace: { getConfiguration: () => ({ get: key => values[key] }), workspaceFolders: [] },
     window: { createOutputChannel: () => ({ appendLine() {}, dispose() {} }) },
@@ -175,4 +175,27 @@ test('全局聊天搜索遵守项目范围并在选择后打开目标，取消�
   chosen = null; vscode.window.showQuickPick = async () => undefined;
   await workbench.switchChat(); assert.equal(chosen, null);
   workbench.dispose();
+});
+
+test('记住已选择聊天，重开时恢复；失效历史不阻断连接', async () => {
+  const workspaceValues = {}; const { workbench } = fixture({}, workspaceValues);
+  const session = { id: 'a', title: '任务', cwd: '/a', messages: [] };
+  workbench.threads = [session]; workbench.store = { get: () => session, resume: async () => session };
+  await workbench.selectThread('a'); assert.equal(workspaceValues.activeThread, 'a'); workbench.dispose();
+  const reopened = fixture({}, workspaceValues).workbench; assert.equal(reopened.activeId, 'a'); reopened.dispose();
+  const { EventEmitter } = require('node:events');
+  class Rpc extends EventEmitter {
+    async connect() {}
+    async request(method) {
+      if (method === 'thread/list' || method === 'model/list') return { data: [] };
+      if (method === 'account/read') return { account: null };
+      if (method === 'thread/resume') throw new Error('聊天已不可用');
+      throw new Error(method);
+    }
+    close() {}
+  }
+  const invalid = fixture({ './lib/rpc': { RpcClient: Rpc } }, workspaceValues).workbench;
+  invalid.connection = 'offline'; invalid.readRoots = async () => {}; invalid.executable = () => 'test';
+  await invalid.connect(); assert.equal(invalid.connection, 'ready'); assert.equal(invalid.activeId, null);
+  assert.equal(workspaceValues.activeThread, null); invalid.dispose();
 });
