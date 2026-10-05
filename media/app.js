@@ -38,13 +38,19 @@ if (typeof document !== 'undefined') (() => {
   const vscode = acquireVsCodeApi();
   const saved = vscode.getState() || {};
   const ui = { drafts: saved.drafts || {}, scrolls: saved.scrolls || {}, collapsed: saved.collapsed || {},
-    drawer: false, pinned: !!saved.pinned, width: saved.width || 260, sideVisible: false, query: '' };
+    drawer: saved.drawer ?? !!saved.pinned, width: saved.width || 240, sideVisible: false, query: '' };
   let state = { connection: 'offline', projects: [], models: [], approvals: [], scope: 'current' };
   const pending = {}; const queuedReferences = []; let selectedReference = null;
   const post = (type, values = {}) => vscode.postMessage({ type, ...values });
-  const persist = () => vscode.setState({ drafts: ui.drafts, scrolls: ui.scrolls, collapsed: ui.collapsed, pinned: ui.pinned, width: ui.width });
+  const persist = () => vscode.setState({ drafts: ui.drafts, scrolls: ui.scrolls, collapsed: ui.collapsed, drawer: ui.drawer, width: ui.width });
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
   const button = (label, glyph, action, cls = '') => { const b = el('button', cls, glyph); b.type = 'button'; b.title = label; b.setAttribute('aria-label', label); b.onclick = action; return b; };
+  const iconButton = (label, shape, action) => {
+    const b = button(label, '', action);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.classList.add('icon');
+    const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path'); outline.setAttribute('d', shape); svg.append(outline); b.append(svg); return b;
+  };
   const select = (label, options, action) => { const s = el('select'); s.title = label; s.setAttribute('aria-label', label);
     for (const [value, text] of options) { const o = el('option', '', text); o.value = value; s.append(o); }
     s.onchange = () => action(s.value); return s; };
@@ -65,18 +71,18 @@ if (typeof document !== 'undefined') (() => {
   const root = document.getElementById('app');
   const shell = el('div', 'shell'); root.append(shell);
   const rail = el('nav', 'rail'); rail.setAttribute('aria-label', '工作台导航'); shell.append(rail);
-  const drawerToggle = button('聊天列表 (Alt+L)', '☰', () => { ui.drawer = !ui.drawer; layout(); if (ui.drawer) search.focus(); });
+  const drawerToggle = button('聊天列表 (Alt+L)', '☰', () => setDrawer(!ui.drawer));
   rail.append(drawerToggle, el('span', 'rail-label', '聊天'), button('新建聊天', '+', () => post('newChat')), button('侧边聊天', '◧', openSide));
   const railBottom = el('div', 'rail-bottom'); railBottom.append(button('刷新连接', '↻', () => post('refresh')), button('设置', '⚙', () => post('settings'))); rail.append(railBottom);
-  const backdrop = el('button', 'backdrop'); backdrop.title = '关闭聊天列表'; backdrop.setAttribute('aria-label', '关闭聊天列表'); backdrop.onclick = () => { ui.drawer = false; layout(); drawerToggle.focus(); }; shell.append(backdrop);
-  const drawer = el('aside', 'drawer'); drawer.setAttribute('aria-label', '项目与聊天'); shell.append(drawer);
-  const drawerHead = el('div', 'drawer-head'); drawerHead.append(el('strong', '', '项目聊天'), button('固定聊天列表', '固定', () => { ui.pinned = !ui.pinned; ui.drawer = true; persist(); layout(); }), button('关闭聊天列表', '×', () => { ui.drawer = false; ui.pinned = false; persist(); layout(); drawerToggle.focus(); })); drawer.append(drawerHead);
+  const drawer = el('aside', 'drawer'); drawer.id = 'chat-drawer'; drawer.setAttribute('aria-label', '项目与聊天'); shell.append(drawer);
+  drawerToggle.setAttribute('aria-controls', drawer.id);
+  const drawerHead = el('div', 'drawer-head'); drawerHead.append(el('strong', '', '项目聊天'), iconButton('收起聊天列表', 'M19 12H5m7-7-7 7 7 7', () => setDrawer(false))); drawer.append(drawerHead);
   const scope = select('项目范围', [['current', '仅当前项目'], ['priority', '当前项目优先'], ['all', '全部项目']], value => post('setScope', { scope: value })); drawer.append(scope);
   const search = el('input', 'search'); search.placeholder = '搜索项目或聊天'; search.setAttribute('aria-label', '搜索项目或聊天'); search.oninput = () => { ui.query = search.value; renderTree(); }; drawer.append(search);
   const tree = el('div', 'tree'); drawer.append(tree);
   const resize = el('div', 'resize'); resize.role = 'separator'; resize.tabIndex = 0; resize.setAttribute('aria-label', '调整聊天列表宽度'); resize.setAttribute('aria-orientation', 'vertical'); drawer.append(resize);
-  resize.onpointerdown = e => { resize.setPointerCapture(e.pointerId); resize.onpointermove = event => { ui.width = Math.max(200, Math.min(440, event.clientX - 46)); layout(); }; resize.onpointerup = () => { resize.onpointermove = null; persist(); }; };
-  resize.onkeydown = e => { if (['ArrowLeft', 'ArrowRight'].includes(e.key)) { ui.width = Math.max(200, Math.min(440, ui.width + (e.key === 'ArrowRight' ? 10 : -10))); persist(); layout(); e.preventDefault(); } };
+  resize.onpointerdown = e => { const startX = e.clientX, startWidth = drawer.getBoundingClientRect().width; resize.setPointerCapture(e.pointerId); resize.onpointermove = event => { ui.width = Math.max(160, Math.min(440, startWidth + event.clientX - startX)); layout(); }; resize.onpointerup = resize.onpointercancel = () => { resize.onpointermove = null; persist(); }; };
+  resize.onkeydown = e => { if (['ArrowLeft', 'ArrowRight'].includes(e.key)) { ui.width = Math.max(160, Math.min(440, drawer.getBoundingClientRect().width + (e.key === 'ArrowRight' ? 10 : -10))); persist(); layout(); e.preventDefault(); } };
   const workspace = el('main', 'workspace'); shell.append(workspace);
   const status = el('div', 'connection'); status.role = 'status'; workspace.append(status);
   const approvals = el('section', 'approvals'); approvals.setAttribute('aria-label', '待处理确认'); workspace.append(approvals);
@@ -121,11 +127,12 @@ if (typeof document !== 'undefined') (() => {
   const preview = el('dialog', 'reference-preview'); const previewTitle = el('strong'); const previewText = el('pre'); preview.append(previewTitle, previewText, button('关闭引用预览', '关闭', () => preview.close())); root.append(preview);
   function getDraft(key) { return ui.drafts[key] || (ui.drafts[key] = { text: '', references: [] }); }
   function openSide() { ui.sideVisible = true; layout(); post('sideOpen'); }
+  function setDrawer(open) { ui.drawer = open; persist(); layout(); (open ? search : drawerToggle).focus(); }
   function layout() {
-    shell.classList.toggle('drawer-open', ui.drawer || ui.pinned); shell.classList.toggle('drawer-pinned', ui.pinned);
-    shell.style.setProperty('--drawer-width', `${ui.width}px`); backdrop.hidden = !(ui.drawer && !ui.pinned);
-    drawerToggle.setAttribute('aria-expanded', String(ui.drawer || ui.pinned));
-    drawer.hidden = !(ui.drawer || ui.pinned); panes.side.panel.hidden = !ui.sideVisible;
+    shell.classList.toggle('drawer-open', ui.drawer);
+    shell.style.setProperty('--drawer-width', `${ui.width}px`);
+    drawerToggle.setAttribute('aria-expanded', String(ui.drawer));
+    drawer.hidden = !ui.drawer; panes.side.panel.hidden = !ui.sideVisible;
     columns.classList.toggle('has-side', ui.sideVisible);
   }
   let treeSignature = '';
@@ -145,13 +152,15 @@ if (typeof document !== 'undefined') (() => {
       heading.append(button(`在 ${project.name} 新建聊天`, '+', () => post('newChat', { cwd: project.path }))); group.append(heading);
       if (!ui.collapsed[project.id]) for (const thread of project.threads) {
         const row = el('div', 'thread-row'); row.classList.toggle('active', thread.id === state.main?.id);
-        const choose = button(thread.title, `${thread.isPinned ? '◆ ' : ''}${thread.title || '未命名聊天'}`, () => { post('selectThread', { threadId: thread.id }); if (!ui.pinned) { ui.drawer = false; layout(); } }, 'thread-select');
+        const choose = button(thread.title, `${thread.isPinned ? '◆ ' : ''}${thread.title || '未命名聊天'}`, () => post('selectThread', { threadId: thread.id }), 'thread-select');
         if (thread.id === state.main?.id) choose.setAttribute('aria-current', 'true');
         const waiting = state.approvals?.some(a => a.threadId === thread.id);
         const busy = thread.busy || (typeof thread.status === 'string' ? thread.status === 'active' : thread.status?.type === 'active');
         row.append(choose);
         if (waiting || busy) { const badge = el('span', 'badge', waiting ? '待确认' : '执行中'); badge.title = waiting ? '此聊天有待处理确认' : '此聊天正在执行'; row.append(badge); }
-        row.append(button(thread.isPinned ? '取消置顶' : '置顶聊天', thread.isPinned ? '取消置顶' : '置顶', () => post('pin', { threadId: thread.id })), button('归档聊天', '归档', () => post('archive', { threadId: thread.id }))); group.append(row);
+        const actions = el('div', 'thread-actions');
+        actions.append(iconButton(thread.isPinned ? '取消置顶' : '置顶聊天', 'M9 3h6m-5 0v6l-4 4v2h12v-2l-4-4V3m-2 12v6', () => post('pin', { threadId: thread.id })), iconButton('归档聊天', 'M3 3h18v4H3zM5 7v14h14V7m-10 5h6', () => post('archive', { threadId: thread.id })));
+        row.append(actions); group.append(row);
       }
       tree.append(group);
     }
@@ -355,8 +364,8 @@ if (typeof document !== 'undefined') (() => {
     }
   });
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { toolbar.hidden = true; if (preview.open) preview.close(); else if (ui.drawer && !ui.pinned) { ui.drawer = false; layout(); drawerToggle.focus(); } else if (ui.sideVisible) { ui.sideVisible = false; layout(); } }
-    if (event.altKey && event.key.toLowerCase() === 'l') { event.preventDefault(); ui.drawer = !ui.drawer; layout(); (ui.drawer ? search : drawerToggle).focus(); }
+    if (event.key === 'Escape') { toolbar.hidden = true; if (preview.open) preview.close(); else if (ui.drawer) setDrawer(false); else if (ui.sideVisible) { ui.sideVisible = false; layout(); } }
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.repeat && !event.isComposing && event.key.toLowerCase() === 'l') { event.preventDefault(); setDrawer(!ui.drawer); }
   });
   render(); post('ready');
 })();
