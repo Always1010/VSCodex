@@ -127,6 +127,10 @@ class Workbench {
   async refresh() {
     if (!this.store || this.connection !== 'ready') return;
     const threads = await this.store.list();
+    for (const thread of threads) {
+      const session = this.store.get(thread.id);
+      if (session && session.title === '新聊天') session.title = thread.name || thread.title || thread.preview?.slice(0, 60) || session.title;
+    }
     this.threads = threads.map(t => ({ ...t, title: t.name || t.title || t.preview?.slice(0, 60) || '未命名聊天', isPinned: this.pins[t.id] ?? t.isPinned ?? false }));
     this.publish();
   }

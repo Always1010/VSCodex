@@ -73,6 +73,17 @@ test('创建侧边时切换主聊天不重定向引用，取消新聊天选择�
   workbench.dispose();
 });
 
+test('刷新使新聊天获得历史标题，同时保留自定义名称', async () => {
+  const { workbench } = fixture();
+  const sessions = new Map([['a', { id: 'a', title: '新聊天', cwd: '/a', messages: [] }], ['b', { id: 'b', title: '我的名称', cwd: '/a', messages: [] }]]);
+  workbench.store = { get: id => sessions.get(id), sessions, list: async () => [{ id: 'a', preview: '实现项目导航', cwd: '/a' }, { id: 'b', preview: '旧问题', cwd: '/a' }] };
+  await workbench.refresh();
+  const threads = workbench.state().projects.flatMap(p => p.threads);
+  assert.equal(threads.find(t => t.id === 'a').title, '实现项目导航');
+  assert.equal(threads.find(t => t.id === 'b').title, '我的名称');
+  workbench.dispose();
+});
+
 test('审批仅响应用户当前选择，不授予会话级权限，未知请求拒绝执行', () => {
   const { workbench } = fixture(); const results = [];
   workbench.rpc = { respond: (...args) => results.push(args), respondError: (...args) => results.push(args), close() {} };
