@@ -45,7 +45,7 @@ test('Timeout and close reject requests without generation replay', async t => {
   assert.equal(rpc.pending.size, 0);
 });
 
-test('Resume hydrates history and active status; list includes appServer and traverses pages', async () => {
+test('Resume hydrates history and active status; list uses interactive defaults and traverses pages', async () => {
   const rpc = new FakeRpc((method, params) => {
     if (method === 'thread/resume') return { thread: { ...thread('history', '/other'), status: { type: 'active' }, turns: [{ id: 'active', status: 'inProgress', items: [
       { id: 'u', type: 'userMessage', content: [{ type: 'text', text: '问' }] }, { id: 'a', type: 'agentMessage', text: '答' }, { id: 'c', type: 'commandExecution', command: 'pwd', aggregatedOutput: '/other' }
@@ -57,7 +57,7 @@ test('Resume hydrates history and active status; list includes appServer and tra
   assert.deepEqual(session.messages.map(m => m.role), ['user', 'assistant', 'tool']); assert.equal(session.turnId, 'active');
   assert.equal(rpc.calls[0].params.sandbox, 'workspace-write'); assert.equal(rpc.calls[0].params.approvalPolicy, 'on-request');
   await assert.rejects(store.send('history', '重复'), /正在运行/);
-  assert.equal((await store.list()).length, 2); assert.ok(rpc.calls.find(c => c.method === 'thread/list').params.sourceKinds.includes('appServer'));
+  assert.equal((await store.list()).length, 2); assert.equal(rpc.calls.find(c => c.method === 'thread/list').params.sourceKinds, undefined);
 });
 
 test('Main and side streams stay isolated, use session cwd, and reconcile optimistic messages', async () => {
