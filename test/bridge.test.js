@@ -15,7 +15,7 @@ function fixture(dependencies = {}, workspaceValues = {}) {
   const vscode = {
     workspace: { getConfiguration: () => ({ get: key => values[key] }), workspaceFolders: [], onDidChangeWorkspaceFolders: () => ({ dispose() {} }), onDidChangeConfiguration: callback => { registered.configuration = callback; return { dispose() {} }; } },
     window: { createOutputChannel: () => ({ appendLine() {}, dispose() {} }), registerWebviewViewProvider: (_, provider) => { registered.workbench = provider; return { dispose() {} }; } },
-    extensions: { getExtension: () => undefined }, commands: { executeCommand: async (...args) => commands.push(args), registerCommand: () => ({ dispose() {} }) },
+    extensions: { getExtension: () => undefined }, commands: { executeCommand: async (...args) => commands.push(args), registerCommand: (name, callback) => { registered[name] = callback; return { dispose() {} }; } },
     Uri: { file: value => ({ scheme: 'file', fsPath: value }), parse: value => { const url = new URL(value); return { scheme: url.protocol.slice(0, -1), authority: url.host, fsPath: decodeURIComponent(url.pathname) }; } }
   };
   const module = { exports: {} }; const requireFile = createRequire(path.join(root, 'extension.js'));
@@ -25,6 +25,31 @@ function fixture(dependencies = {}, workspaceValues = {}) {
   workbench.connection = 'ready';
   return { workbench, values, memory, sent, commands, vscode, context, registered, activate: module.exports.activate };
 }
+test('聊天列表快捷键在页面就绪前保留操作，就绪后每次只切换一次', async () => {
+  const setup = fixture(); setup.activate(setup.context);
+  const workbench = setup.registered.workbench;
+  workbench.connect = async () => {}; workbench.view = setup.workbench.view;
+  const toggle = setup.registered['vscodex.toggleChatList'];
+  await toggle();
+  assert.equal(setup.sent.length, 0);
+  assert.equal(workbench.pendingMessages.length, 1);
+  assert.equal(setup.commands[0][0], 'vscodex.chat.focus');
+  await workbench.handle({ type: 'ready' });
+  assert.equal(workbench.pendingMessages.length, 0);
+  assert.equal(setup.sent.filter(message => message.type === 'toggleChatList').length, 1);
+  await toggle();
+  assert.equal(setup.sent.filter(message => message.type === 'toggleChatList').length, 2);
+  workbench.view = null; workbench.webviewReady = false;
+  await toggle(); workbench.view = setup.workbench.view;
+  await workbench.handle({ type: 'ready' });
+  assert.equal(setup.sent.filter(message => message.type === 'toggleChatList').length, 3);
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const binding = manifest.contributes.keybindings.find(item => item.command === 'vscodex.toggleChatList');
+  assert.equal(binding.key, 'ctrl+alt+j'); assert.equal(binding.mac, 'cmd+alt+j');
+  workbench.dispose(); setup.workbench.dispose();
+  for (const subscription of setup.context.subscriptions) subscription.dispose?.();
+});
+
 test('侧边发送固定只读、主聊天保留自己的执行目录，筛选不会改变发送目标', async () => {
   const { workbench, sent } = fixture(); const calls = [];
   const main = { id: 'main', title: '主任务', cwd: '/project-a', messages: [], busy: false };

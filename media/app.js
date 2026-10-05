@@ -71,7 +71,7 @@ if (typeof document !== 'undefined') (() => {
   const root = document.getElementById('app');
   const shell = el('div', 'shell'); root.append(shell);
   const rail = el('nav', 'rail'); rail.setAttribute('aria-label', '工作台导航'); shell.append(rail);
-  const drawerToggle = button('聊天列表 (Alt+L)', '☰', () => setDrawer(!ui.drawer));
+  const drawerToggle = button('展开或收起聊天列表 (Ctrl+Alt+J / Cmd+Alt+J；工作台内 Alt+L)', '☰', () => setDrawer(!ui.drawer));
   rail.append(drawerToggle, el('span', 'rail-label', '聊天'), button('新建聊天', '+', () => post('newChat')), button('侧边聊天', '◧', openSide));
   const railBottom = el('div', 'rail-bottom'); railBottom.append(button('刷新连接', '↻', () => post('refresh')), button('设置', '⚙', () => post('settings'))); rail.append(railBottom);
   const drawer = el('aside', 'drawer'); drawer.id = 'chat-drawer'; drawer.setAttribute('aria-label', '项目与聊天'); shell.append(drawer);
@@ -326,6 +326,7 @@ if (typeof document !== 'undefined') (() => {
   }
   window.addEventListener('message', event => {
     const message = event.data; if (!message || typeof message.type !== 'string') return;
+    if (message.type === 'toggleChatList') setDrawer(!ui.drawer);
     if (message.type === 'state') {
       state = message.state; render();
       for (let i = queuedReferences.length - 1; i >= 0; i--) {
