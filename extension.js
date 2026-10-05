@@ -108,7 +108,10 @@ class Workbench {
     });
     try {
       await rpc.connect(); this.connection = 'ready';
-      await this.refresh();
+      await this.refresh().catch(error => {
+        this.error = '聊天列表读取失败，可刷新重试。' + error.message;
+        this.notifyError(error);
+      });
       await this.refreshAccount();
       const listed = await rpc.request('model/list', {});
       this.models = (listed.data || []).map(m => ({ id: m.model || m.id, displayName: m.displayName || m.model || m.id, supportedReasoningEfforts: m.supportedReasoningEfforts }));
@@ -127,6 +130,7 @@ class Workbench {
   async refresh() {
     if (!this.store || this.connection !== 'ready') return;
     const threads = await this.store.list();
+    this.error = '';
     for (const thread of threads) {
       const session = this.store.get(thread.id);
       if (session && session.title === '新聊天') session.title = thread.name || thread.title || thread.preview?.slice(0, 60) || session.title;
