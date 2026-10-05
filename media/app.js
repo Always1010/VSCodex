@@ -177,7 +177,8 @@ if (typeof document !== 'undefined') (() => {
       updateSelect(pane.title, [['', '新聊天'], ...options], session?.id);
     }
     else updateSelect(pane.title, [['codex', 'Codex · 只读分析'], ['responses', '普通讨论 · API']], state.sideProvider || 'codex');
-    pane.notice.textContent = channel === 'side' ? ((session?.provider || state.sideProvider) === 'responses' ? `纯讨论 · ${state.discussionModel || '请在设置中配置模型和 API 密钥'}` : '只读项目分析 · 独立上下文') : session?.cwd || '选择项目，开始一段新聊天';
+    const pure = session?.provider === 'responses' || (channel === 'side' && !session && state.sideProvider === 'responses');
+    pane.notice.textContent = pure ? `纯讨论 · ${state.discussionModel || '请在设置中配置模型和 API 密钥'}` : channel === 'side' ? '只读项目分析 · 独立上下文' : session?.cwd || '选择项目，开始一段新聊天';
     const bottom = pane.messages.scrollHeight - pane.messages.scrollTop - pane.messages.clientHeight < 64;
     const incoming = new Set();
     for (const message of session?.messages || []) {
@@ -217,7 +218,6 @@ if (typeof document !== 'undefined') (() => {
     if (bottom && incoming.size) pane.messages.scrollTop = pane.messages.scrollHeight;
     updateSelect(pane.model, [['', '默认模型'], ...(state.models || []).map(m => [m.id, m.displayName])], state.model);
     pane.effort.value = state.effort || 'medium'; pane.permissions.value = channel === 'side' ? 'read-only' : state.permissions || 'workspace-write';
-    const pure = channel === 'side' && (session?.provider || state.sideProvider) === 'responses';
     pane.model.hidden = pure; pane.effort.hidden = pure; pane.permissions.hidden = pure; pane.permissions.disabled = channel === 'side';
     pane.send.textContent = session?.busy ? '■' : '↑'; pane.send.title = session?.busy ? '停止生成' : '发送 (Ctrl+Enter)'; pane.send.setAttribute('aria-label', pane.send.title);
     pane.send.disabled = !!pending[channel] && !session?.busy;

@@ -371,6 +371,8 @@ class Workbench {
       await this.connect();
       await this.rpc.request('thread/name/set', { threadId: session.id, name: '侧边讨论 · ' + (this.session(this.activeId)?.title || '项目分析') });
       session.title = '侧边讨论 · ' + (this.session(this.activeId)?.title || '项目分析');
+      // Saved sessions can act as a main chat; side sends still force read-only.
+      session.side = false;
     }
     await this.persist(); await this.refresh(); this.publish();
   }
