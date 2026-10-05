@@ -9,6 +9,7 @@
   "categories": ["AI", "Other"],
   "extensionKind": ["workspace"],
   "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
   "capabilities": { "untrustedWorkspaces": { "supported": false, "description": "Codex 可以执行命令和修改工作区，需要先信任工作区。" }, "virtualWorkspaces": false },
   "scripts": {
     "check": "node scripts/check.js",
@@ -23,7 +24,8 @@
       { "command": "vscodex.switchChat", "title": "VSCodex: 搜索并切换聊天" },
       { "command": "vscodex.addSelection", "title": "VSCodex: 添加选中代码到对话" },
       { "command": "vscodex.askSelection", "title": "VSCodex: 在侧边聊天中询问选中代码" },
-      { "command": "vscodex.setApiKey", "title": "VSCodex: 设置普通讨论 API 密钥" }
+      { "command": "vscodex.setApiKey", "title": "VSCodex: 设置普通讨论 API 密钥" },
+      { "command": "vscodex.checkForUpdates", "title": "VSCodex: 检查本地更新" }
     ],
     "menus": { "editor/context": [
       { "command": "vscodex.addSelection", "when": "editorHasSelection", "group": "vscodex@1" },
@@ -36,6 +38,8 @@
     "configuration": {
       "title": "VSCodex",
       "properties": {
+        "vscodex.autoUpdate": { "type": "boolean", "default": true, "scope": "machine", "description": "自动检查本地打包目录并安装新版 VSCodex；安装后提示重新加载，不自动打断聊天。" },
+        "vscodex.updateSource": { "type": "string", "default": "", "scope": "machine", "description": "本机 VSIX 与 .update.json 所在目录的绝对路径。留空使用安装包记录的打包目录；仅支持本机正式安装。" },
         "vscodex.codexPath": { "type": "string", "default": "", "description": "Codex 可执行文件路径。留空时查找官方扩展携带的 Codex 或系统 PATH；不自动安装。" },
         "vscodex.scope": { "type": "string", "enum": ["current", "priority", "all"], "enumDescriptions": ["仅当前项目", "当前项目优先", "全部项目"], "default": "current", "description": "项目导航的默认范围。" },
         "vscodex.additionalProjects": { "type": "array", "items": { "type": "object", "required": ["name", "path"], "properties": { "name": { "type": "string" }, "path": { "type": "string" }, "folders": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false }, "default": [], "description": "额外项目与子目录或 worktree 的显式关联；路径属于当前扩展运行环境。" },
