@@ -6,7 +6,7 @@
 
 需要 VS Code 1.95+、Node.js 20+ 和已安装的 Codex。开发源码不需要安装 npm 包。打开项目后，手动选择“运行 VSCodex 开发宿主”调试配置并按 F5；这会打开一个新的 VS Code 窗口。
 
-也可以运行 `node scripts/package.js`，然后在 VS Code 的扩展菜单选择“从 VSIX 安装”，选择 `artifacts/vscodex-workbench-0.1.0.vsix`。安装和启动由用户手动执行；脚本不修改现有官方扩展。
+也可以运行 `node scripts/package.js`，然后在 VS Code 的扩展菜单选择“从 VSIX 安装”，选择固定文件名 `artifacts/vscodex-workbench.vsix`。安装和启动由用户手动执行；脚本不修改现有官方扩展。
 
 运行“VSCodex: 打开聊天工作台”，或按 `Ctrl+Alt+C`（macOS 为 `Cmd+Alt+C`）。工作台默认位于底部面板；可用 VS Code 的“移动视图”将其移到侧边栏。
 
@@ -91,6 +91,8 @@ Codex 尚未保存历史的新空会话可能无法跨重启恢复。此时工�
 
 `node scripts/check.js` 检查 JavaScript 语法和清单。测试使用 Node 原生 `node:test`，按修改范围选择 `test/backend.test.js`、`test/context.test.js`、`test/discussion.test.js`、`test/bridge.test.js`、`test/frontend.test.js` 或 `test/package.test.js`。不会发出真实模型生成请求。
 
-`node scripts/package.js` 生成零依赖 VSIX 安装包。打包仅收录运行时文件和用户文档，不收录测试、缓存、账户信息或仓库规则。输出保存在被 Git 忽略的 `artifacts/`。
+`node scripts/package.js`（或 `npm run package`）生成零依赖 VSIX 安装包，固定覆盖 `artifacts/vscodex-workbench.vsix`，同时生成 `.update.json` 更新索引。打包仅收录运行时文件和用户文档，不收录测试、缓存、账户信息或仓库规则。输出保存在被 Git 忽略的 `artifacts/`。
+
+文件名没有版本号；VSIX 内部保留版本。源码或文档变化时，脚本基于更新索引自动递增内部补丁版本，无变化时复用版本，不修改源码 `package.json`。请保留更新索引，以便版本连续递增；清空 `artifacts/` 后，需将源码版本提高到已安装版本以上再打包。安装包内保存本机打包目录，适合本地开发更新。
 
 真实 VS Code 扩展宿主、账户推理调用和桌面窗口验证需单独执行；无头测试不能替代这些验证。以当前可执行版本的 app-server schema 为准，升级后先验证协议兼容性。
